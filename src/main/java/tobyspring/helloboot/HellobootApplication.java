@@ -10,6 +10,8 @@ import org.springframework.boot.web.servlet.server.ServletWebServerFactory;
 import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.http.*;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.web.context.support.GenericWebApplicationContext;
+import org.springframework.web.servlet.DispatcherServlet;
 
 import javax.annotation.PostConstruct;
 import javax.servlet.ServletContext;
@@ -24,33 +26,25 @@ import java.io.IOException;
 public class  HellobootApplication {
     public static void main(String[] args) {
 
-        GenericApplicationContext applicationContext = new GenericApplicationContext();
+        GenericWebApplicationContext applicationContext = new GenericWebApplicationContext(){
+            @Override
+            protected void onRefresh() {
+                super.onRefresh();
+                ServletWebServerFactory serverFactory = new TomcatServletWebServerFactory();
+                WebServer webServer = serverFactory.getWebServer(servletContext -> {
+                    servletContext.addServlet("dispatcherServlet",
+                            new DispatcherServlet(this)
+                    ).addMapping("/*");
+                });
+                webServer.start();
+            }
+        };
         //빈을 등록하기 위해서 GenericApplicationContext을 사용해서 HellocController라는 클래스를 빈으로 생성해서 getBean을 통해 사용한다
 
         applicationContext.registerBean(HelloController.class);
+        applicationContext.registerBean(SimpleHelloService.class);
         applicationContext.refresh();
 
-        ServletWebServerFactory serverFactory = new TomcatServletWebServerFactory();
-        WebServer webServer = serverFactory.getWebServer(servletContext -> {
-            servletContext.addServlet("frontController", new HttpServlet() {
-                @Override
-                protected void service(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-                   // 인증, 보안, 다국어, 공통기능
-                    if(req.getRequestURI().equals("/hello") && req.getMethod().equals(HttpMethod.GET.name())){
-                        String name =  req.getParameter("name");
-                        HelloController controller=applicationContext.getBean(HelloController.class);
-                        String ret = controller.hello(name);
 
-                        resp.setContentType(MediaType.TEXT_PLAIN_VALUE);
-                        resp.getWriter().println(ret);
-                    }else{
-                        resp.setStatus(HttpStatus.NOT_FOUND.value());
-                    }
-
-
-                }
-            }).addMapping("/*");
-        });
-        webServer.start();
     }
 }
